@@ -79,6 +79,17 @@ function Index() {
     return { s, o, sc, percent: o.percent ?? sc?.percent, review: o.review ?? sc?.review, date: o.date ?? s.date };
   }).sort((a, b) => (b.percent ?? -1) - (a.percent ?? -1)), [students, overrides, scores]);
 
+  const updateStudent = (id: string, patch: Partial<Student>) => {
+    const next = students.map((x) => (x.id === id ? { ...x, ...patch } : x));
+    setStudents(next); save("pdl-students", next);
+  };
+  const removeStudent = (id: string) => {
+    if (!window.confirm("¿Eliminar esta fila?")) return;
+    const next = students.filter((x) => x.id !== id);
+    setStudents(next); save("pdl-students", next);
+    const ov = { ...overrides }; delete ov[id]; setOverrides(ov); save("pdl-overrides", ov);
+  };
+
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setError("");
     const repo = form.repo.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
@@ -130,16 +141,25 @@ function Index() {
             <tr>
               <th className="p-3">#</th><th className="p-3">Alumno</th><th className="p-3">Repositorio</th>
               <th className="p-3">Fecha</th><th className="p-3">Progreso %</th><th className="p-3">Revisión</th>
-              {teacher && <th className="p-3">Aprobado</th>}
+              <th className="p-3">Rinde</th>{teacher && <th className="p-3" />}
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">Sin alumnos registrados.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Sin alumnos registrados.</td></tr>}
             {rows.map(({ s, o, sc, percent, review, date }, i) => (
               <tr key={s.id} className="border-t">
                 <td className="p-3 text-muted-foreground">{i + 1}</td>
-                <td className="p-3 font-medium">{s.name} {s.last}</td>
-                <td className="p-3"><a className="text-primary hover:underline" href={`https://github.com/${s.repo}`} target="_blank" rel="noreferrer">{s.repo}</a></td>
+                <td className="p-3 font-medium">
+                  {teacher ? (
+                    <div className="flex gap-1">
+                      <input className={`${input} w-24`} value={s.name} onChange={(e) => updateStudent(s.id, { name: e.target.value })} />
+                      <input className={`${input} w-24`} value={s.last} onChange={(e) => updateStudent(s.id, { last: e.target.value })} />
+                    </div>
+                  ) : <>{s.name} {s.last}</>}
+                </td>
+                <td className="p-3">{teacher ? (
+                  <input className={`${input} w-44`} defaultValue={s.repo} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== s.repo) updateStudent(s.id, { repo: v }); }} />
+                ) : <a className="text-primary hover:underline" href={`https://github.com/${s.repo}`} target="_blank" rel="noreferrer">{s.repo}</a>}</td>
                 <td className="p-3">
                   {teacher ? (
                     <select className={input} value={date} onChange={(e) => setOv(s.id, { date: e.target.value })}>
@@ -168,9 +188,12 @@ function Index() {
                     <input className={`${input} w-full`} value={review ?? ""} onChange={(e) => setOv(s.id, { review: e.target.value })} />
                   ) : (review ?? (sc === null ? "— ⚠️" : "…"))}
                 </td>
+                <td className="p-3 text-center">
+                  <input type="checkbox" aria-label="Rinde" className="size-4 accent-primary disabled:opacity-100" disabled={!teacher} checked={!!o.approved} onChange={(e) => setOv(s.id, { approved: e.target.checked })} />
+                </td>
                 {teacher && (
                   <td className="p-3 text-center">
-                    <input type="checkbox" className="size-4 accent-primary" checked={!!o.approved} onChange={(e) => setOv(s.id, { approved: e.target.checked })} />
+                    <button aria-label="Eliminar fila" onClick={() => removeStudent(s.id)} className="rounded-md px-2 py-1 text-destructive hover:bg-accent">✕</button>
                   </td>
                 )}
               </tr>
