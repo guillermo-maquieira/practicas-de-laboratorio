@@ -2,7 +2,7 @@ export type TreeItem = { path: string; type: string };
 export type RepoInfo = { size: number; description: string | null };
 export type Score = { percent: number; review: string };
 
-export const DATES = ["26 de noviembre", "17 de diciembre"] as const;
+export const DATES = ["26/11", "17/12"] as const;
 
 export function computeScore(repo: RepoInfo, tree: TreeItem[]): Score {
   const paths = tree.map((t) => t.path.toLowerCase());
@@ -20,5 +20,10 @@ export function computeScore(repo: RepoInfo, tree: TreeItem[]): Score {
   if (repo.description && repo.description.trim()) pts += 10; else missing.push("descripción");
   if (has((p) => base(p).startsWith("license") || base(p).startsWith("licence"))) pts += 10;
   else missing.push("LICENSE");
-  return { percent: pts, review: missing.length ? `Falta: ${missing.join(", ")}` : "Completo ✓" };
+  return {
+    percent: pts,
+    review: missing.length
+      ? `El repositorio está incompleto. Faltan: ${missing.join(", ")}.`
+      : "El repositorio está completo y cumple con todos los requisitos.",
+  };
 }

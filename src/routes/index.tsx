@@ -197,7 +197,11 @@ function Index() {
                   ) : (review ?? (sc === null ? "— ⚠️" : "…"))}
                 </td>
                 <td className="p-3 text-center">
-                  <input type="checkbox" aria-label="Rinde" className="size-4 accent-primary disabled:opacity-100" disabled={!teacher} checked={!!o.approved} onChange={(e) => setOv(s.id, { approved: e.target.checked })} />
+                  {teacher ? (
+                    <input type="checkbox" aria-label="Rinde" className="size-4 accent-primary" checked={!!o.approved} onChange={(e) => setOv(s.id, { approved: e.target.checked })} />
+                  ) : (
+                    <span aria-label="Rinde" className={o.approved ? "font-bold text-primary" : "text-muted-foreground"}>{o.approved ? "✓" : "?"}</span>
+                  )}
                 </td>
                 {teacher && (
                   <td className="p-3 text-center">
