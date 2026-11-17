@@ -112,32 +112,40 @@ function Index() {
     else if (pin !== null) window.alert("PIN incorrecto");
   }
 
-  const input = "h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
+  const input = "h-9 rounded-sm border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <header className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">PDL <span className="text-primary">–</span> Prácticas de Laboratorio</h1>
-        <button onClick={toggleLock} aria-label={teacher ? "Salir de modo docente" : "Modo docente"}
-          className="rounded-md p-2 text-xl hover:bg-accent">{teacher ? "🔓" : "🔒"}</button>
+    <main className="min-h-screen">
+      <header className="bg-ub text-ub-foreground">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+          <div className="flex items-center gap-4">
+            <span className="flex size-12 items-center justify-center border-2 border-ub-foreground text-xl font-extrabold tracking-tight">PDL</span>
+            <h1 className="text-xl font-bold uppercase leading-tight tracking-wide">
+              Prácticas de<br />Laboratorio
+            </h1>
+          </div>
+          <button onClick={toggleLock} aria-label={teacher ? "Salir de modo docente" : "Modo docente"}
+            className="rounded-sm p-2 text-xl hover:bg-white/10">{teacher ? "🔓" : "🔒"}</button>
+        </div>
       </header>
 
-      <form onSubmit={submit} className="mb-10 grid gap-3 rounded-lg border p-4 sm:grid-cols-[1fr_1fr_1.4fr_auto_auto]">
+      <div className="mx-auto max-w-6xl px-6 py-10">
+      <form onSubmit={submit} className="mb-10 grid gap-3 rounded-sm border p-4 sm:grid-cols-[1fr_1fr_1.4fr_auto_auto]">
         <input className={input} placeholder="Nombre" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <input className={input} placeholder="Apellido" value={form.last} onChange={(e) => setForm({ ...form, last: e.target.value })} />
         <input className={input} placeholder="usuario/repo" value={form.repo} onChange={(e) => setForm({ ...form, repo: e.target.value })} />
         <select className={input} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}>
           {DATES.map((d) => <option key={d}>{d}</option>)}
         </select>
-        <button disabled={busy} className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+        <button disabled={busy} className="h-9 rounded-sm bg-primary px-4 text-sm font-bold uppercase tracking-wide text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
           {busy ? "Validando…" : "Registrar"}
         </button>
         {error && <p className="text-sm text-destructive sm:col-span-5">{error}</p>}
       </form>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto rounded-sm border">
         <table className="w-full text-sm">
-          <thead className="bg-muted text-left text-muted-foreground">
+          <thead className="bg-ub text-left text-xs font-bold uppercase tracking-wider text-ub-foreground">
             <tr>
               <th className="p-3">#</th><th className="p-3">Alumno</th><th className="p-3">Repositorio</th>
               <th className="p-3">Fecha</th><th className="p-3">Progreso %</th><th className="p-3">Revisión</th>
@@ -200,6 +208,7 @@ function Index() {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </main>
   );
