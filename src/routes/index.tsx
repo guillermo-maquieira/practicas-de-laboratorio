@@ -1,23 +1,183 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { computeScore, DATES, type Score } from "@/lib/pdl";
 
-// The home route ships no og:image, so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "PDL – Prácticas de Laboratorio" },
+      { name: "description", content: "Registro de alumnos y progreso de sus repositorios de GitHub." },
+      { property: "og:title", content: "PDL – Prácticas de Laboratorio" },
+      { property: "og:description", content: "Registro de alumnos y progreso de sus repositorios de GitHub." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
+type Student = { id: string; name: string; last: string; repo: string; date: string };
+type Override = { percent?: number; review?: string; date?: string; approved?: boolean };
+type Cached = { at: number; score: Score | null };
+const TTL = 30 * 60 * 1000;
+const PIN = "8954";
+const load = <T,>(k: string, d: T): T => { try { return JSON.parse(localStorage.getItem(k) ?? "") as T; } catch { return d; } };
+const save = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v));
+
+async function fetchScore(repo: string): Promise<Score | null> {
+  const cache = load<Record<string, Cached>>("pdl-cache", {});
+  const c = cache[repo];
+  if (c && Date.now() - c.at < TTL) return c.score;
+  let score: Score | null = null;
+  try {
+    const [r, t] = await Promise.all([
+      fetch(`https://api.github.com/repos/${repo}`),
+      fetch(`https://api.github.com/repos/${repo}/git/trees/HEAD?recursive=1`),
+    ]);
+    if (r.ok) {
+      const info = await r.json();
+      const tree = t.ok ? (await t.json()).tree ?? [] : [];
+      score = computeScore(info, tree);
+    }
+  } catch { score = null; }
+  const fresh = load<Record<string, Cached>>("pdl-cache", {});
+  fresh[repo] = { at: Date.now(), score };
+  save("pdl-cache", fresh);
+  return score;
+}
+
 function Index() {
+  const [students, setStudents] = useState<Student[]>([]);
+  const [overrides, setOverrides] = useState<Record<string, Override>>({});
+  const [scores, setScores] = useState<Record<string, Score | null | undefined>>({});
+  const [teacher, setTeacher] = useState(false);
+  const [form, setForm] = useState({ name: "", last: "", repo: "", date: DATES[0] as string });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setStudents(load("pdl-students", []));
+    setOverrides(load("pdl-overrides", {}));
+    setTeacher(sessionStorage.getItem("pdl-teacher") === "1");
+  }, []);
+
+  useEffect(() => {
+    students.forEach((s) => {
+      if (scores[s.repo] !== undefined) return;
+      fetchScore(s.repo).then((sc) => setScores((p) => ({ ...p, [s.repo]: sc })));
+    });
+  }, [students]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setOv = (id: string, patch: Override) => {
+    const next = { ...overrides, [id]: { ...overrides[id], ...patch } };
+    setOverrides(next); save("pdl-overrides", next);
+  };
+
+  const rows = useMemo(() => students.map((s) => {
+    const o = overrides[s.id] ?? {};
+    const sc = scores[s.repo];
+    return { s, o, sc, percent: o.percent ?? sc?.percent, review: o.review ?? sc?.review, date: o.date ?? s.date };
+  }).sort((a, b) => (b.percent ?? -1) - (a.percent ?? -1)), [students, overrides, scores]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault(); setError("");
+    const repo = form.repo.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+    if (!form.name.trim() || !form.last.trim()) return setError("Completá nombre y apellido.");
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return setError("Formato inválido. Usá usuario/repo.");
+    setBusy(true);
+    try {
+      const r = await fetch(`https://api.github.com/repos/${repo}`);
+      if (!r.ok) { setError(r.status === 404 ? "El repositorio no existe o es privado." : `GitHub respondió ${r.status}.`); return; }
+    } catch { setError("No se pudo contactar a GitHub."); return; } finally { setBusy(false); }
+    const next = [...students, { id: crypto.randomUUID(), name: form.name.trim(), last: form.last.trim(), repo, date: form.date }];
+    setStudents(next); save("pdl-students", next);
+    setForm({ name: "", last: "", repo: "", date: DATES[0] });
+  }
+
+  function toggleLock() {
+    if (teacher) { setTeacher(false); sessionStorage.removeItem("pdl-teacher"); return; }
+    const pin = window.prompt("PIN docente");
+    if (pin === PIN) { setTeacher(true); sessionStorage.setItem("pdl-teacher", "1"); }
+    else if (pin !== null) window.alert("PIN incorrecto");
+  }
+
+  const input = "h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring";
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <main className="mx-auto max-w-6xl px-6 py-10">
+      <header className="mb-8 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">PDL <span className="text-primary">–</span> Prácticas de Laboratorio</h1>
+        <button onClick={toggleLock} aria-label={teacher ? "Salir de modo docente" : "Modo docente"}
+          className="rounded-md p-2 text-xl hover:bg-accent">{teacher ? "🔓" : "🔒"}</button>
+      </header>
+
+      <form onSubmit={submit} className="mb-10 grid gap-3 rounded-lg border p-4 sm:grid-cols-[1fr_1fr_1.4fr_auto_auto]">
+        <input className={input} placeholder="Nombre" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input className={input} placeholder="Apellido" value={form.last} onChange={(e) => setForm({ ...form, last: e.target.value })} />
+        <input className={input} placeholder="usuario/repo" value={form.repo} onChange={(e) => setForm({ ...form, repo: e.target.value })} />
+        <select className={input} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}>
+          {DATES.map((d) => <option key={d}>{d}</option>)}
+        </select>
+        <button disabled={busy} className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+          {busy ? "Validando…" : "Registrar"}
+        </button>
+        {error && <p className="text-sm text-destructive sm:col-span-5">{error}</p>}
+      </form>
+
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted text-left text-muted-foreground">
+            <tr>
+              <th className="p-3">#</th><th className="p-3">Alumno</th><th className="p-3">Repositorio</th>
+              <th className="p-3">Fecha</th><th className="p-3">Progreso %</th><th className="p-3">Revisión</th>
+              {teacher && <th className="p-3">Aprobado</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">Sin alumnos registrados.</td></tr>}
+            {rows.map(({ s, o, sc, percent, review, date }, i) => (
+              <tr key={s.id} className="border-t">
+                <td className="p-3 text-muted-foreground">{i + 1}</td>
+                <td className="p-3 font-medium">{s.name} {s.last}</td>
+                <td className="p-3"><a className="text-primary hover:underline" href={`https://github.com/${s.repo}`} target="_blank" rel="noreferrer">{s.repo}</a></td>
+                <td className="p-3">
+                  {teacher ? (
+                    <select className={input} value={date} onChange={(e) => setOv(s.id, { date: e.target.value })}>
+                      {DATES.map((d) => <option key={d}>{d}</option>)}
+                    </select>
+                  ) : date}
+                </td>
+                <td className="p-3 min-w-44">
+                  {percent === undefined ? (sc === null ? <span>— ⚠️</span> : <span className="text-muted-foreground">…</span>) : (
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full bg-primary transition-all" style={{ width: `${percent}%` }} />
+                      </div>
+                      {teacher ? (
+                        <input type="number" min={0} max={100} className={`${input} w-16 px-1`} value={percent}
+                          onChange={(e) => setOv(s.id, { percent: Math.max(0, Math.min(100, Number(e.target.value))) })} />
+                      ) : <span className="w-10 text-right tabular-nums">{percent}%</span>}
+                    </div>
+                  )}
+                  {teacher && percent === undefined && sc === null && (
+                    <input type="number" placeholder="%" className={`${input} mt-1 w-16 px-1`} onChange={(e) => setOv(s.id, { percent: Number(e.target.value) })} />
+                  )}
+                </td>
+                <td className="p-3 text-muted-foreground">
+                  {teacher ? (
+                    <input className={`${input} w-full`} value={review ?? ""} onChange={(e) => setOv(s.id, { review: e.target.value })} />
+                  ) : (review ?? (sc === null ? "— ⚠️" : "…"))}
+                </td>
+                {teacher && (
+                  <td className="p-3 text-center">
+                    <input type="checkbox" className="size-4 accent-primary" checked={!!o.approved} onChange={(e) => setOv(s.id, { approved: e.target.checked })} />
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </main>
   );
 }
