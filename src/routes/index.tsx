@@ -19,7 +19,7 @@ export const Route = createFileRoute("/")({
 });
 
 type Student = { id: string; name: string; last: string; repo: string; date: string };
-type Override = { percent?: number; review?: string; date?: string; approved?: boolean };
+type Override = { percent?: number | undefined; review?: string | undefined; date?: string | undefined; approved?: boolean | undefined };
 type Cached = { at: number; score: Score | null };
 const TTL = 30 * 60 * 1000;
 const PIN = "8954";
@@ -73,7 +73,7 @@ function Index() {
 
   const pin = () => sessionStorage.getItem("pdl-pin") ?? "";
   const tUpdate = (id: string, patch: Record<string, unknown>) =>
-    teacherUpdate({ data: { pin: pin(), id, patch } }).catch((e) => { window.alert("No se pudo guardar: " + e.message); refresh(); });
+    teacherUpdate({ data: { pin: pin(), id, patch: patch as never } }).catch((e) => { window.alert("No se pudo guardar: " + e.message); refresh(); });
 
   useEffect(() => {
     students.forEach((s) => {

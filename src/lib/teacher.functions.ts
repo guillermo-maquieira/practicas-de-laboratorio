@@ -17,7 +17,7 @@ export const teacherUpdate = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (data.pin !== PIN) throw new Error("PIN incorrecto");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("students").update(Object.fromEntries(Object.entries(data.patch).filter(([, v]) => v !== undefined))).eq("id", data.id);
+    const { error } = await supabaseAdmin.from("students").update(Object.fromEntries(Object.entries(data.patch).filter(([, v]) => v !== undefined)) as never).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
