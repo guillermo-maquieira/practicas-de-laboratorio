@@ -28,3 +28,5 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+# AGENTS
+- Students live in the Lovable Cloud `students` table: anyone may read/insert, teacher edits/deletes go through PIN-checked server functions in src/lib/teacher.functions.ts (why: shared data across browsers without user accounts).
