@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { computeScore, DATES, type Score } from "@/lib/pdl";
+import { supabase } from "@/integrations/supabase/client";
+import { teacherUpdate, teacherDelete } from "@/lib/teacher.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -55,11 +57,23 @@ function Index() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const refresh = async () => {
+    const { data } = await supabase.from("students").select("*").order("created_at");
+    if (!data) return;
+    setStudents(data.map((r) => ({ id: r.id, name: r.name, last: r.last, repo: r.repo, date: r.date })));
+    const ov: Record<string, Override> = {};
+    data.forEach((r) => { ov[r.id] = { percent: r.percent ?? undefined, review: r.review ?? undefined, date: r.override_date ?? undefined, approved: r.approved }; });
+    setOverrides(ov);
+  };
+
   useEffect(() => {
-    setStudents(load("pdl-students", []));
-    setOverrides(load("pdl-overrides", {}));
+    refresh();
     setTeacher(sessionStorage.getItem("pdl-teacher") === "1");
   }, []);
+
+  const pin = () => sessionStorage.getItem("pdl-pin") ?? "";
+  const tUpdate = (id: string, patch: Record<string, unknown>) =>
+    teacherUpdate({ data: { pin: pin(), id, patch } }).catch((e) => { window.alert("No se pudo guardar: " + e.message); refresh(); });
 
   useEffect(() => {
     students.forEach((s) => {
@@ -70,7 +84,13 @@ function Index() {
 
   const setOv = (id: string, patch: Override) => {
     const next = { ...overrides, [id]: { ...overrides[id], ...patch } };
-    setOverrides(next); save("pdl-overrides", next);
+    setOverrides(next);
+    const db: Record<string, unknown> = {};
+    if ("percent" in patch) db["percent"] = patch.percent ?? null;
+    if ("review" in patch) db["review"] = patch.review ?? null;
+    if ("date" in patch) db["override_date"] = patch.date ?? null;
+    if ("approved" in patch) db["approved"] = !!patch.approved;
+    tUpdate(id, db);
   };
 
   const rows = useMemo(() => students.map((s) => {
@@ -81,13 +101,14 @@ function Index() {
 
   const updateStudent = (id: string, patch: Partial<Student>) => {
     const next = students.map((x) => (x.id === id ? { ...x, ...patch } : x));
-    setStudents(next); save("pdl-students", next);
+    setStudents(next); tUpdate(id, patch);
   };
   const removeStudent = (id: string) => {
     if (!window.confirm("¿Eliminar esta fila?")) return;
     const next = students.filter((x) => x.id !== id);
-    setStudents(next); save("pdl-students", next);
-    const ov = { ...overrides }; delete ov[id]; setOverrides(ov); save("pdl-overrides", ov);
+    setStudents(next);
+    const ov = { ...overrides }; delete ov[id]; setOverrides(ov);
+    teacherDelete({ data: { pin: pin(), id } }).catch((e) => { window.alert("No se pudo eliminar: " + e.message); refresh(); });
   };
 
   async function submit(e: React.FormEvent) {
@@ -100,15 +121,16 @@ function Index() {
       const r = await fetch(`https://api.github.com/repos/${repo}`);
       if (!r.ok) { setError(r.status === 404 ? "El repositorio no existe o es privado." : `GitHub respondió ${r.status}.`); return; }
     } catch { setError("No se pudo contactar a GitHub."); return; } finally { setBusy(false); }
-    const next = [...students, { id: crypto.randomUUID(), name: form.name.trim(), last: form.last.trim(), repo, date: form.date }];
-    setStudents(next); save("pdl-students", next);
+    const { error: insErr } = await supabase.from("students").insert({ name: form.name.trim(), last: form.last.trim(), repo, date: form.date });
+    if (insErr) { setError("No se pudo guardar el registro."); return; }
+    await refresh();
     setForm({ name: "", last: "", repo: "", date: DATES[0] });
   }
 
   function toggleLock() {
-    if (teacher) { setTeacher(false); sessionStorage.removeItem("pdl-teacher"); return; }
+    if (teacher) { setTeacher(false); sessionStorage.removeItem("pdl-teacher"); sessionStorage.removeItem("pdl-pin"); return; }
     const pin = window.prompt("PIN docente");
-    if (pin === PIN) { setTeacher(true); sessionStorage.setItem("pdl-teacher", "1"); }
+    if (pin === PIN) { setTeacher(true); sessionStorage.setItem("pdl-teacher", "1"); sessionStorage.setItem("pdl-pin", pin); }
     else if (pin !== null) window.alert("PIN incorrecto");
   }
 
