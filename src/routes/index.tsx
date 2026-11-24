@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { computeScore, DATES, type Score } from "@/lib/pdl";
+import { computeScore, DATES, ALL_DATES, filterByDate, type Score } from "@/lib/pdl";
 import { supabase } from "@/integrations/supabase/client";
 import { teacherUpdate, teacherDelete } from "@/lib/teacher.functions";
 
@@ -56,6 +56,7 @@ function Index() {
   const [form, setForm] = useState({ name: "", last: "", repo: "", date: DATES[0] as string });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState<string>(ALL_DATES);
 
   const refresh = async () => {
     const { data } = await supabase.from("students").select("*").order("created_at");
@@ -93,11 +94,11 @@ function Index() {
     tUpdate(id, db);
   };
 
-  const rows = useMemo(() => students.map((s) => {
+  const rows = useMemo(() => filterByDate(students.map((s) => {
     const o = overrides[s.id] ?? {};
     const sc = scores[s.repo];
     return { s, o, sc, percent: o.percent ?? sc?.percent, review: o.review ?? sc?.review, date: o.date ?? s.date };
-  }).sort((a, b) => (b.percent ?? -1) - (a.percent ?? -1)), [students, overrides, scores]);
+  }), filter).sort((a, b) => (b.percent ?? -1) - (a.percent ?? -1)), [students, overrides, scores, filter]);
 
   const updateStudent = (id: string, patch: Partial<Student>) => {
     const next = students.map((x) => (x.id === id ? { ...x, ...patch } : x));
@@ -164,6 +165,19 @@ function Index() {
         </button>
         {error && <p className="text-sm text-destructive sm:col-span-5">{error}</p>}
       </form>
+
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Filtrar por fecha
+          <select className={input} value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <option>{ALL_DATES}</option>
+            {DATES.map((d) => <option key={d}>{d}</option>)}
+          </select>
+        </label>
+        <span className="text-xs text-muted-foreground">
+          {rows.length} {rows.length === 1 ? "alumno" : "alumnos"}
+        </span>
+      </div>
 
       <div className="overflow-x-auto rounded-sm border">
         <table className="w-full text-sm">

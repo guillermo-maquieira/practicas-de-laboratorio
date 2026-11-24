@@ -2,7 +2,14 @@ export type TreeItem = { path: string; type: string };
 export type RepoInfo = { size: number; description: string | null };
 export type Score = { percent: number; review: string };
 
-export const DATES = ["26/11", "17/12"] as const;
+export const DATES = ["26/11/26", "17/12/26"] as const;
+export const ALL_DATES = "Todas" as const;
+
+/** Rows whose effective date matches the filter ("Todas" keeps every row). */
+export function filterByDate<T extends { date: string }>(rows: T[], date: string): T[] {
+  if (date === ALL_DATES) return rows;
+  return rows.filter((r) => r.date === date);
+}
 
 export function computeScore(repo: RepoInfo, tree: TreeItem[]): Score {
   const paths = tree.map((t) => t.path.toLowerCase());
